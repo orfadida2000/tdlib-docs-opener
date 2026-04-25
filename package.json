@@ -2,7 +2,7 @@
   "name": "tdlib-docs-opener",
   "displayName": "TDLib Docs Opener",
   "description": "Open TDLib function documentation from selected text inside VS Code integrated browser.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "orfadida",
   "author": {
     "name": "Or Fadida",
@@ -15,7 +15,8 @@
   },
   "icon": "assets/icon.png",
   "engines": {
-    "vscode": "^1.109.0"
+    "vscode": "^1.109.0",
+    "node": ">=18.17.0"
   },
   "keywords": [
     "tdlib",
@@ -26,9 +27,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:tdlibDocs.openFunctionDocs"
-  ],
   "main": "./index.js",
   "extensionKind": [
     "ui"
@@ -38,6 +36,21 @@
       {
         "command": "tdlibDocs.openFunctionDocs",
         "title": "TDLib Docs: Open Function Documentation",
+        "category": "TDLib Docs"
+      },
+      {
+        "command": "tdlibDocs.openFunctionsIndex",
+        "title": "TDLib Docs: Open Functions Index",
+        "category": "TDLib Docs"
+      },
+      {
+        "command": "tdlibDocs.openDocsIndex",
+        "title": "TDLib Docs: Open Docs Index",
+        "category": "TDLib Docs"
+      },
+      {
+        "command": "tdlibDocs.openTdlibOverview",
+        "title": "TDLib Docs: Open TDLib Overview",
         "category": "TDLib Docs"
       }
     ]

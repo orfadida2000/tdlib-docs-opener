@@ -2,7 +2,23 @@
 
 All notable changes to this extension will be documented in this file.
 
-## [1.0.0] - 2026-04-25
+## [1.1.0] - 2026-04-25
+
+### Added
+
+- Added `TDLib Docs: Open Functions Index`.
+- Added `TDLib Docs: Open Docs Index`.
+- Added `TDLib Docs: Open TDLib Overview`.
+- Added direct-open commands for common TDLib documentation pages:
+  - `https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html`
+  - `https://core.telegram.org/tdlib/docs/`
+  - `https://core.telegram.org/tdlib/`
+
+### Changed
+
+- Updated the README to document all available TDLib documentation commands.
+
+## [1.0.0] - 2026-04-24
 
 ### Added
 

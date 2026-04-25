@@ -4,9 +4,13 @@ const http = require("node:http");
 const https = require("node:https");
 const { URL } = require("node:url");
 
-const COMMAND_ID = "tdlibDocs.openFunctionDocs";
+const OPEN_FUNCTION_DOCS_COMMAND_ID = "tdlibDocs.openFunctionDocs";
+const OPEN_FUNCTIONS_INDEX_COMMAND_ID = "tdlibDocs.openFunctionsIndex";
+const OPEN_DOCS_INDEX_COMMAND_ID = "tdlibDocs.openDocsIndex";
+const OPEN_TDLIB_OVERVIEW_COMMAND_ID = "tdlibDocs.openTdlibOverview";
 
 const BASE_DOCS_URL = "https://core.telegram.org/tdlib/docs/";
+const TDLIB_OVERVIEW_URL = "https://core.telegram.org/tdlib/";
 const FUNCTION_CLASS_URL = new URL(
   "classtd_1_1td__api_1_1_function.html",
   BASE_DOCS_URL
@@ -20,11 +24,36 @@ let functionIndexPromise = undefined;
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  const disposable = vscode.commands.registerCommand(COMMAND_ID, async (rawCandidate) => {
-    await openTdlibFunctionDocs(rawCandidate);
-  });
-
-  context.subscriptions.push(disposable);
+  const openFunctionDocsDisposable = vscode.commands.registerCommand(
+    OPEN_FUNCTION_DOCS_COMMAND_ID,
+    async (rawCandidate) => {
+      await openTdlibFunctionDocs(rawCandidate);
+    }
+  );
+  const openFunctionsIndexDisposable = vscode.commands.registerCommand(
+    OPEN_FUNCTIONS_INDEX_COMMAND_ID,
+    async () => {
+      await openUrlInIntegratedBrowser(FUNCTION_CLASS_URL);
+    }
+  );
+  const openDocsIndexDisposable = vscode.commands.registerCommand(
+    OPEN_DOCS_INDEX_COMMAND_ID,
+    async () => {
+      await openUrlInIntegratedBrowser(BASE_DOCS_URL);
+    }
+  );
+  const openTdlibOverviewDisposable = vscode.commands.registerCommand(
+    OPEN_TDLIB_OVERVIEW_COMMAND_ID,
+    async () => {
+      await openUrlInIntegratedBrowser(TDLIB_OVERVIEW_URL);
+    }
+  );
+  context.subscriptions.push(
+    openFunctionDocsDisposable,
+    openFunctionsIndexDisposable,
+    openDocsIndexDisposable,
+    openTdlibOverviewDisposable
+  );
 }
 
 /**

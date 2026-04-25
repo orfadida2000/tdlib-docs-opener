@@ -1,26 +1,43 @@
 # TDLib Docs Opener
 
-A small custom VS Code extension that opens TDLib function documentation from selected text.
+A VS Code extension that adds TDLib documentation navigation commands.
 
-The extension reads the selected text in the active editor, tries to match it against the list of TDLib functions documented under `td_api::Function`, and opens the matching documentation page inside a VS Code tab using VS Code’s integrated browser.
+The extension provides commands for opening:
 
-## Command
+- documentation for a specific TDLib function, based on selected text
+- the TDLib functions index page for `td_api::Function`
+- the TDLib generated documentation index
+- the main TDLib overview page
 
-The extension contributes one command:
+For concrete TDLib functions documented under `td_api::Function`, the extension can use the selected text in the active editor as the function-name candidate. It can also open common TDLib documentation index pages directly.
+
+Pages are opened inside a VS Code tab using VS Code’s integrated browser.
+
+## Commands
+
+The extension contributes these commands:
 
 ```text
 TDLib Docs: Open Function Documentation
+TDLib Docs: Open Functions Index
+TDLib Docs: Open Docs Index
+TDLib Docs: Open TDLib Overview
 ```
 
-Command ID:
+Command IDs:
 
 ```text
 tdlibDocs.openFunctionDocs
+tdlibDocs.openFunctionsIndex
+tdlibDocs.openDocsIndex
+tdlibDocs.openTdlibOverview
 ```
 
 ## Behavior
 
-When the command runs:
+### Open Function Documentation
+
+When `TDLib Docs: Open Function Documentation` runs:
 
 1. The extension fetches the TDLib function list from:
 
@@ -40,9 +57,33 @@ When the command runs:
 
 7. Only one of the predefined TDLib function names can be selected.
 
+### Open Functions Index
+
+Opens:
+
+```text
+https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html
+```
+
+### Open Docs Index
+
+Opens:
+
+```text
+https://core.telegram.org/tdlib/docs/
+```
+
+### Open TDLib Overview
+
+Opens:
+
+```text
+https://core.telegram.org/tdlib/
+```
+
 ## Matching rules
 
-Matching is normalized.
+Function-name matching is normalized.
 
 The selected/provided text is normalized by:
 
@@ -102,15 +143,43 @@ The cache resets when:
 - the extension host restarts
 - the extension is reinstalled or updated
 
+The direct-open commands do not need the function cache.
+
 ## Installation for local development
 
-Install dependencies:
+### Prerequisites
+
+Install Node.js and npm.
+
+This project is intended to be built with Node.js `>=18.17.0`. The recommended version is the one specified in `.nvmrc`.
+
+If you use `nvm`, run:
+
+```bash
+nvm use
+```
+
+If the required Node version is not installed yet, install it first. For example, if `.nvmrc` contains `24`:
+
+```bash
+nvm install 24
+nvm use 24
+```
+
+Check the active versions:
+
+```bash
+node -v
+npm -v
+```
+
+### Install dependencies
 
 ```bash
 npm install
 ```
 
-Package the extension:
+### Package the extension
 
 ```bash
 npm run package
@@ -119,13 +188,21 @@ npm run package
 This creates a `.vsix` file, for example:
 
 ```text
-tdlib-docs-opener-1.0.0.vsix
+tdlib-docs-opener-1.1.0.vsix
 ```
 
-Install it locally:
+### Install the extension locally
 
-```bash
-code --install-extension tdlib-docs-opener-1.0.0.vsix --force
+From Windows PowerShell, install the generated VSIX into the local VS Code UI side:
+
+```powershell
+code --install-extension .\tdlib-docs-opener-1.1.0.vsix --force
+```
+
+If the VSIX is inside WSL, use a Windows-accessible path, for example:
+
+```powershell
+code --install-extension "\\wsl.localhost\Ubuntu\home\user\tools\vscode\tdlib-docs-opener\tdlib-docs-opener-1.1.0.vsix" --force
 ```
 
 Reload VS Code:
@@ -133,7 +210,6 @@ Reload VS Code:
 ```text
 Developer: Reload Window
 ```
-
 ## Testing
 
 Open any file and select text such as:
@@ -156,25 +232,15 @@ TDLib Docs: Open Function Documentation
 
 Expected result: the documentation page for `sendMessage` opens inside a VS Code tab.
 
-## Notes
+You can also run:
 
-This extension is currently intended for local/private VSIX installation.
-
-If `package.json` uses:
-
-```json
-"private": true
+```text
+TDLib Docs: Open Functions Index
+TDLib Docs: Open Docs Index
+TDLib Docs: Open TDLib Overview
 ```
 
-then npm refuses accidental publication with `npm publish`.
-
-This does not prevent:
-
-- creating a `.vsix`
-- installing the extension locally
-- using the extension in VS Code
-
-For npm publishing, remove `"private": true` and make sure the package name/version are valid and available.
+to open the corresponding TDLib documentation pages directly.
 
 ## Repository
 
