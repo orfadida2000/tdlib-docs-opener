@@ -1,6 +1,6 @@
 # TDLib Docs Opener
 
-A small local VS Code extension that opens TDLib function documentation from selected text.
+A small custom VS Code extension that opens TDLib function documentation from selected text.
 
 The extension reads the selected text in the active editor, tries to match it against the list of TDLib functions documented under `td_api::Function`, and opens the matching documentation page inside a VS Code tab using VS Code’s integrated browser.
 
