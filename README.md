@@ -175,3 +175,18 @@ This does not prevent:
 - using the extension in VS Code
 
 For npm publishing, remove `"private": true` and make sure the package name/version are valid and available.
+
+## Repository
+
+[GitHub repository](https://github.com/orfadida2000/tdlib-docs-opener)
+
+## License
+
+MIT.<br>
+See **[LICENSE](LICENSE)** for details.
+
+## Author
+
+- **Name:** Or Fadida
+- **Email:** [or@fadida.net](mailto:or@fadida.net)
+- **GitHub:** [orfadida2000](https://github.com/orfadida2000)

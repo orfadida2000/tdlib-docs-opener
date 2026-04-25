@@ -20,8 +20,6 @@ let functionIndexPromise = undefined;
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  vscode.window.showInformationMessage("TDLib Docs Opener activated");
-
   const disposable = vscode.commands.registerCommand(COMMAND_ID, async (rawCandidate) => {
     await openTdlibFunctionDocs(rawCandidate);
   });
