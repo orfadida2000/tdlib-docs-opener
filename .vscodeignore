@@ -9,6 +9,10 @@
 # Packaged VS Code extensions
 *.vsix
 
+#
+assets/*.png
+!assets/icon.png
+
 # npm / package manager logs
 npm-debug.log*
 yarn-debug.log*
