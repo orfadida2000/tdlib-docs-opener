@@ -2,7 +2,7 @@
 
 All notable changes to this extension will be documented in this file.
 
-## [1.0.0] - Initial local version
+## [1.0.0] - 2026-04-25
 
 ### Added
 
@@ -23,6 +23,7 @@ All notable changes to this extension will be documented in this file.
 - Added fast direct lookup using a normalized-name `Map`.
 - Added defensive detection for duplicate normalized TDLib function names.
 - Added fallback from VS Code integrated browser command to Simple Browser command when available.
+- Added a GitHub repository for source control and issue tracking.
 
 ### Notes
 

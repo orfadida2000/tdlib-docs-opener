@@ -9,6 +9,10 @@
     "email": "or@fadida.net"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orfadida2000/tdllib-docs-opener.git"
+  },
   "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.109.0"
