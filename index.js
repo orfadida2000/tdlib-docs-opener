@@ -4,40 +4,55 @@ const http = require("node:http");
 const https = require("node:https");
 const { URL } = require("node:url");
 
-const OPEN_FUNCTION_DOCS_COMMAND_ID = "tdlibDocs.openFunctionDocs";
+const OPEN_ENTITY_DOCS_COMMAND_ID = "tdlibDocs.openEntityDocs";
 const OPEN_FUNCTIONS_INDEX_COMMAND_ID = "tdlibDocs.openFunctionsIndex";
-const OPEN_DOCS_INDEX_COMMAND_ID = "tdlibDocs.openDocsIndex";
+const OPEN_CLASSES_INDEX_COMMAND_ID = "tdlibDocs.openClassesIndex";
+const OPEN_DOCS_OVERVIEW_COMMAND_ID = "tdlibDocs.openDocsOverview";
 const OPEN_TDLIB_OVERVIEW_COMMAND_ID = "tdlibDocs.openTdlibOverview";
 
-const BASE_DOCS_URL = "https://core.telegram.org/tdlib/docs/";
 const TDLIB_OVERVIEW_URL = "https://core.telegram.org/tdlib/";
-const FUNCTION_CLASS_URL = new URL(
+const BASE_DOCS_URL = new URL(
+  "docs/",
+  TDLIB_OVERVIEW_URL
+).toString();
+const FUNCTIONS_INDEX_URL = new URL(
   "classtd_1_1td__api_1_1_function.html",
   BASE_DOCS_URL
 ).toString();
+const CLASSES_INDEX_URL = new URL(
+  "classes.html",
+  BASE_DOCS_URL
+).toString();
+
 
 const MAX_DESCRIPTION_FETCH_CONCURRENCY = 8;
 
-let functionIndexPromise = undefined;
+let entityIndexPromise = undefined;
 
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  const openFunctionDocsDisposable = vscode.commands.registerCommand(
-    OPEN_FUNCTION_DOCS_COMMAND_ID,
+  const openEntityDocsDisposable = vscode.commands.registerCommand(
+    OPEN_ENTITY_DOCS_COMMAND_ID,
     async (rawCandidate) => {
-      await openTdlibFunctionDocs(rawCandidate);
+      await openTdlibEntityDocs(rawCandidate);
     }
   );
   const openFunctionsIndexDisposable = vscode.commands.registerCommand(
     OPEN_FUNCTIONS_INDEX_COMMAND_ID,
     async () => {
-      await openUrlInIntegratedBrowser(FUNCTION_CLASS_URL);
+      await openUrlInIntegratedBrowser(FUNCTIONS_INDEX_URL);
     }
   );
-  const openDocsIndexDisposable = vscode.commands.registerCommand(
-    OPEN_DOCS_INDEX_COMMAND_ID,
+  const openClassesIndexDisposable = vscode.commands.registerCommand(
+    OPEN_CLASSES_INDEX_COMMAND_ID,
+    async () => {
+      await openUrlInIntegratedBrowser(CLASSES_INDEX_URL);
+    }
+  );
+  const openDocsOverviewDisposable = vscode.commands.registerCommand(
+    OPEN_DOCS_OVERVIEW_COMMAND_ID,
     async () => {
       await openUrlInIntegratedBrowser(BASE_DOCS_URL);
     }
@@ -49,9 +64,10 @@ function activate(context) {
     }
   );
   context.subscriptions.push(
-    openFunctionDocsDisposable,
+    openEntityDocsDisposable,
     openFunctionsIndexDisposable,
-    openDocsIndexDisposable,
+    openClassesIndexDisposable,
+    openDocsOverviewDisposable,
     openTdlibOverviewDisposable
   );
 }
@@ -65,20 +81,20 @@ function deactivate() {}
  * @param {unknown} rawCandidate
  * @returns {Promise<void>}
  */
-async function openTdlibFunctionDocs(rawCandidate) {
+async function openTdlibEntityDocs(rawCandidate) {
   try {
-    const functionIndex = await getFunctionIndex();
+    const entityIndex = await getEntityIndex();
 
-    if (functionIndex.targets.length === 0) {
-      await vscode.window.showErrorMessage("No TDLib function targets were found.");
+    if (entityIndex.targets.length === 0) {
+      await vscode.window.showErrorMessage("No TDLib entity targets were found.");
       return;
     }
 
     const rawInput = typeof rawCandidate === "string" ? rawCandidate : getSelectedText();
-    const normalizedInput = normalizeFunctionName(rawInput);
+    const normalizedInput = normalizeEntityName(rawInput);
 
     const directTarget = normalizedInput
-      ? functionIndex.targetByNormalizedName.get(normalizedInput)
+      ? entityIndex.targetByNormalizedName.get(normalizedInput)
       : undefined;
 
     if (directTarget) {
@@ -86,7 +102,7 @@ async function openTdlibFunctionDocs(rawCandidate) {
       return;
     }
 
-    const pickedTarget = await pickFunctionTarget(functionIndex.targets, normalizedInput);
+    const pickedTarget = await pickEntityTarget(entityIndex.targets, normalizedInput);
 
     if (!pickedTarget) {
       return;
@@ -99,48 +115,61 @@ async function openTdlibFunctionDocs(rawCandidate) {
 }
 
 /**
- * @returns {Promise<TdlibFunctionIndex>}
+ * @returns {Promise<TdlibEntityIndex>}
  */
-async function getFunctionIndex() {
-  if (!functionIndexPromise) {
-    functionIndexPromise = loadFunctionIndex();
+async function getEntityIndex() {
+  if (!entityIndexPromise) {
+    entityIndexPromise = loadEntityIndex();
   }
 
   try {
-    return await functionIndexPromise;
+    return await entityIndexPromise;
   } catch (error) {
-    functionIndexPromise = undefined;
+    entityIndexPromise = undefined;
     throw error;
   }
 }
 
 /**
- * @returns {Promise<TdlibFunctionIndex>}
+ * @returns {Promise<TdlibEntityIndex>}
  */
-async function loadFunctionIndex() {
-  const html = await fetchText(FUNCTION_CLASS_URL);
+async function loadEntityIndex() {
+  const html = await fetchText(CLASSES_INDEX_URL);
   const $ = cheerio.load(html);
 
-  const inheritedParagraph = $("body div.contents > p")
-  .filter((_, element) => normalizeWhitespace($(element).text()).startsWith("Inherited by "))
-  .first();
+  const table = $("body div.contents table.classindex").first();
 
-  if (inheritedParagraph.length === 0) {
-    throw new Error("Could not find the TDLib 'Inherited by' paragraph.");
+  if (table.length === 0) {
+    throw new Error("Could not find the TDLib classes index table.");
+  }
+
+  const rows = table.children("tbody").children("tr").add(table.children("tr"));
+
+  if (rows.length === 0) {
+    throw new Error("Could not find any rows in the TDLib classes index table.");
   }
 
   const targets = [];
   const targetByNormalizedName = new Map();
+  
+  rows.each((_, row) => {
+    const anchor = $(row)
+        .children("td")
+        .find("a.el")
+        .first();
 
-  inheritedParagraph.find("a.el").each((_, anchor) => {
-    const name = normalizeWhitespace($(anchor).text());
-    const href = $(anchor).attr("href");
+    if (anchor.length === 0) {
+      return;
+    }
+
+    const name = normalizeWhitespace(anchor.text());
+    const href = anchor.attr("href");
 
     if (!name || !href) {
       return;
     }
 
-    const normalizedName = normalizeFunctionName(name);
+    const normalizedName = normalizeEntityName(name);
 
     if (!normalizedName) {
       return;
@@ -150,7 +179,7 @@ async function loadFunctionIndex() {
       const existingTarget = targetByNormalizedName.get(normalizedName);
 
       throw new Error(
-        `Duplicate normalized TDLib function name "${normalizedName}" for ` +
+        `Duplicate normalized TDLib entity name "${normalizedName}" for ` +
           `"${existingTarget.name}" and "${name}".`
       );
     }
@@ -177,15 +206,15 @@ async function loadFunctionIndex() {
 }
 
 /**
- * @param {Array<TdlibFunctionTarget>} targets
+ * @param {Array<TdlibEntityTarget>} targets
  * @param {string} initialValue
- * @returns {Promise<TdlibFunctionTarget | undefined>}
+ * @returns {Promise<TdlibEntityTarget | undefined>}
  */
-function pickFunctionTarget(targets, initialValue) {
+function pickEntityTarget(targets, initialValue) {
   const quickPick = vscode.window.createQuickPick();
 
-  quickPick.title = "Open TDLib function documentation";
-  quickPick.placeholder = "Type to filter TDLib function names";
+  quickPick.title = "Open TDLib entity documentation";
+  quickPick.placeholder = "Type to filter TDLib entity names";
   quickPick.matchOnDescription = true;
   quickPick.matchOnDetail = true;
   quickPick.items = createQuickPickItems(targets);
@@ -231,7 +260,7 @@ function pickFunctionTarget(targets, initialValue) {
 }
 
 /**
- * @param {Array<TdlibFunctionTarget>} targets
+ * @param {Array<TdlibEntityTarget>} targets
  * @param {vscode.QuickPick<TdlibQuickPickItem>} quickPick
  * @param {() => boolean} isClosed
  * @returns {Promise<void>}
@@ -276,7 +305,7 @@ async function loadDescriptionsIntoQuickPick(targets, quickPick, isClosed) {
 }
 
 /**
- * @param {TdlibFunctionTarget} target
+ * @param {TdlibEntityTarget} target
  * @returns {Promise<void>}
  */
 async function loadTargetDescription(target) {
@@ -297,7 +326,7 @@ async function loadTargetDescription(target) {
 }
 
 /**
- * @param {Array<TdlibFunctionTarget>} targets
+ * @param {Array<TdlibEntityTarget>} targets
  * @returns {Array<TdlibQuickPickItem>}
  */
 function createQuickPickItems(targets) {
@@ -400,7 +429,7 @@ function fetchText(url) {
 }
 
 /**
- * Normalizes both user-provided input and real TDLib function names for matching.
+ * Normalizes both user-provided input and real TDLib entity names for matching.
  *
  * Examples:
  *   "sendMessage"    -> "sendmessage"
@@ -410,7 +439,7 @@ function fetchText(url) {
  * @param {unknown} value
  * @returns {string}
  */
-function normalizeFunctionName(value) {
+function normalizeEntityName(value) {
   return String(value ?? "")
     .trim()
     .replaceAll("_", "")
@@ -420,7 +449,7 @@ function normalizeFunctionName(value) {
 /**
  * Normalizes general extracted text.
  *
- * This is used for HTML text content and descriptions, not for function-name matching.
+ * This is used for HTML text content and descriptions, not for entity-name matching.
  *
  * @param {string} value
  * @returns {string}
@@ -447,13 +476,13 @@ module.exports = {
 };
 
 /**
- * @typedef {object} TdlibFunctionIndex
- * @property {Array<TdlibFunctionTarget>} targets
- * @property {Map<string, TdlibFunctionTarget>} targetByNormalizedName
+ * @typedef {object} TdlibEntityIndex
+ * @property {Array<TdlibEntityTarget>} targets
+ * @property {Map<string, TdlibEntityTarget>} targetByNormalizedName
  */
 
 /**
- * @typedef {object} TdlibFunctionTarget
+ * @typedef {object} TdlibEntityTarget
  * @property {string} name
  * @property {string} normalizedName
  * @property {string} href
@@ -463,5 +492,5 @@ module.exports = {
  */
 
 /**
- * @typedef {vscode.QuickPickItem & { target: TdlibFunctionTarget }} TdlibQuickPickItem
+ * @typedef {vscode.QuickPickItem & { target: TdlibEntityTarget }} TdlibQuickPickItem
  */
