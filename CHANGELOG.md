@@ -2,6 +2,21 @@
 
 All notable changes to this extension will be documented in this file.
 
+## [1.2.0] - 2026-04-27
+
+### Added
+
+- Added `TDLib Docs: Open Classes Index`.
+- Added direct-open commands for common TDLib documentation pages:
+  - `https://core.telegram.org/tdlib/docs/classes.html`
+
+### Changed
+- Renamed `TDLib Docs: Open Docs Index` to `TDLib Docs: Open Documentation Overview`, and updated the command id accordingly from `tdlibDocs.openDocsIndex` to `tdlibDocs.openDocsOverview`.
+- Renamed `TDLib Docs: Open Functions Documentation` to `TDLib Docs: Open Entity Documentation`, and updated the command id accordingly from `tdlibDocs.openFunctionDocs` to `tdlibDocs.openEntityDocs`.
+- The `TDLib Docs: Open Entity Documentation` command now supports opening the documentation for a selected entity (function or class) in the editor, instead of only functions, and the index source it uses for fetching the list of entities has changed from `https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html` to `https://core.telegram.org/tdlib/docs/classes.html`.
+- The `TDLib Docs: Open Entity Documentation` command now also supports opening the documentation for a selected TDLib file member (taken from either `td_json_client.h` or `td_log.h`), it uses a different parsing strategy for fetching the list of file members (and their metadata), and it also uses a different index source which is `https://core.telegram.org/tdlib/docs/globals.html`.
+- Updated the README to document all the changes above.
+
 ## [1.1.0] - 2026-04-25
 
 ### Added

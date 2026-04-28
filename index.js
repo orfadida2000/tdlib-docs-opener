@@ -11,23 +11,20 @@ const OPEN_DOCS_OVERVIEW_COMMAND_ID = "tdlibDocs.openDocsOverview";
 const OPEN_TDLIB_OVERVIEW_COMMAND_ID = "tdlibDocs.openTdlibOverview";
 
 const TDLIB_OVERVIEW_URL = "https://core.telegram.org/tdlib/";
-const BASE_DOCS_URL = new URL(
-  "docs/",
-  TDLIB_OVERVIEW_URL
-).toString();
+const BASE_DOCS_URL = new URL("docs/", TDLIB_OVERVIEW_URL).toString();
 const FUNCTIONS_INDEX_URL = new URL(
   "classtd_1_1td__api_1_1_function.html",
   BASE_DOCS_URL
 ).toString();
-const CLASSES_INDEX_URL = new URL(
-  "classes.html",
-  BASE_DOCS_URL
-).toString();
-
+const CLASSES_INDEX_URL = new URL("classes.html", BASE_DOCS_URL).toString();
+const FILE_MEMBERS_INDEX_URL = new URL("globals.html", BASE_DOCS_URL).toString();
 
 const MAX_DESCRIPTION_FETCH_CONCURRENCY = 8;
+const QUICK_PICK_REFRESH_INTERVAL = 20;
+const MAX_REDIRECTS = 5;
 
 let entityIndexPromise = undefined;
+let activeQuickPickState = undefined;
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -39,30 +36,35 @@ function activate(context) {
       await openTdlibEntityDocs(rawCandidate);
     }
   );
+
   const openFunctionsIndexDisposable = vscode.commands.registerCommand(
     OPEN_FUNCTIONS_INDEX_COMMAND_ID,
     async () => {
       await openUrlInIntegratedBrowser(FUNCTIONS_INDEX_URL);
     }
   );
+
   const openClassesIndexDisposable = vscode.commands.registerCommand(
     OPEN_CLASSES_INDEX_COMMAND_ID,
     async () => {
       await openUrlInIntegratedBrowser(CLASSES_INDEX_URL);
     }
   );
+
   const openDocsOverviewDisposable = vscode.commands.registerCommand(
     OPEN_DOCS_OVERVIEW_COMMAND_ID,
     async () => {
       await openUrlInIntegratedBrowser(BASE_DOCS_URL);
     }
   );
+
   const openTdlibOverviewDisposable = vscode.commands.registerCommand(
     OPEN_TDLIB_OVERVIEW_COMMAND_ID,
     async () => {
       await openUrlInIntegratedBrowser(TDLIB_OVERVIEW_URL);
     }
   );
+
   context.subscriptions.push(
     openEntityDocsDisposable,
     openFunctionsIndexDisposable,
@@ -90,6 +92,8 @@ async function openTdlibEntityDocs(rawCandidate) {
       return;
     }
 
+    startDescriptionLoading(entityIndex);
+
     const rawInput = typeof rawCandidate === "string" ? rawCandidate : getSelectedText();
     const normalizedInput = normalizeEntityName(rawInput);
 
@@ -102,7 +106,7 @@ async function openTdlibEntityDocs(rawCandidate) {
       return;
     }
 
-    const pickedTarget = await pickEntityTarget(entityIndex.targets, normalizedInput);
+    const pickedTarget = await pickEntityTarget(entityIndex, normalizedInput);
 
     if (!pickedTarget) {
       return;
@@ -134,8 +138,8 @@ async function getEntityIndex() {
  * @returns {Promise<TdlibEntityIndex>}
  */
 async function loadEntityIndex() {
-  const html = await fetchText(CLASSES_INDEX_URL);
-  const $ = cheerio.load(html);
+  let html = await fetchText(CLASSES_INDEX_URL);
+  let $ = cheerio.load(html);
 
   const table = $("body div.contents table.classindex").first();
 
@@ -151,12 +155,9 @@ async function loadEntityIndex() {
 
   const targets = [];
   const targetByNormalizedName = new Map();
-  
+
   rows.each((_, row) => {
-    const anchor = $(row)
-        .children("td")
-        .find("a.el")
-        .first();
+    const anchor = $(row).children("td").find("a.el").first();
 
     if (anchor.length === 0) {
       return;
@@ -189,8 +190,84 @@ async function loadEntityIndex() {
       normalizedName,
       href,
       url: new URL(href, BASE_DOCS_URL).toString(),
+
+      checkDescription: true,
       description: undefined,
       descriptionLoaded: false,
+      descriptionLoading: false,
+      descriptionLoadAttempted: false,
+    };
+
+    targets.push(target);
+    targetByNormalizedName.set(normalizedName, target);
+  });
+
+  html = await fetchText(FILE_MEMBERS_INDEX_URL);
+  $ = cheerio.load(html);
+
+  const ul = $("body div.contents ul").first();
+
+  if (ul.length === 0) {
+    throw new Error("Could not find the TDLib file members index.");
+  }
+
+  const lis = ul.children("li");
+
+  if (lis.length === 0) {
+    throw new Error("Could not find any list items in the TDLib file members index.");
+  }
+
+  lis.each((_, li) => {
+    // Example of such list item structure (the parantheses are optional, some items may not have them):
+    // <li>
+    //   "td_receive() : "
+    //   <a class="el" href="td__json__client_8h.html#a62715bea8e41a554d1bac763c187b662">td_json_client.h</a>
+    // </li>
+
+    const anchor = $(li).find("a.el").first();
+
+    if (anchor.length === 0) {
+      return;
+    }
+
+    const li_text = $(li).text();
+
+    const match = li_text.match(/^\s*([^()]+)(?:\(\))?\s*:\s*.*\s*$/);
+    const capturedName = match ? match[1] : li_text;
+
+    const name = normalizeWhitespace(capturedName);
+    const href = anchor.attr("href");
+
+    if (!name || !href) {
+      return;
+    }
+
+    const normalizedName = normalizeEntityName(name);
+
+    if (!normalizedName) {
+      return;
+    }
+
+    if (targetByNormalizedName.has(normalizedName)) {
+      const existingTarget = targetByNormalizedName.get(normalizedName);
+
+      throw new Error(
+        `Duplicate normalized TDLib entity name "${normalizedName}" for ` +
+          `"${existingTarget.name}" and "${name}".`
+      );
+    }
+
+    const target = {
+      name,
+      normalizedName,
+      href,
+      url: new URL(href, BASE_DOCS_URL).toString(),
+
+      checkDescription: false,
+      description: undefined,
+      descriptionLoaded: false,
+      descriptionLoading: false,
+      descriptionLoadAttempted: false,
     };
 
     targets.push(target);
@@ -199,109 +276,85 @@ async function loadEntityIndex() {
 
   targets.sort((left, right) => left.name.localeCompare(right.name));
 
+  const quickPickItems = createQuickPickItems(targets);
+
   return {
     targets,
     targetByNormalizedName,
+    quickPickItems,
+    descriptionNextIndex: 0,
+    descriptionLoadingPromise: undefined,
   };
 }
 
 /**
- * @param {Array<TdlibEntityTarget>} targets
- * @param {string} initialValue
- * @returns {Promise<TdlibEntityTarget | undefined>}
+ * @param {TdlibEntityIndex} entityIndex
+ * @returns {void}
  */
-function pickEntityTarget(targets, initialValue) {
-  const quickPick = vscode.window.createQuickPick();
+function startDescriptionLoading(entityIndex) {
+  if (entityIndex.descriptionLoadingPromise) {
+    return;
+  }
 
-  quickPick.title = "Open TDLib entity documentation";
-  quickPick.placeholder = "Type to filter TDLib entity names";
-  quickPick.matchOnDescription = true;
-  quickPick.matchOnDetail = true;
-  quickPick.items = createQuickPickItems(targets);
-  quickPick.value = initialValue;
-  quickPick.busy = true;
-
-  let isClosed = false;
-
-  const descriptionLoadingPromise = loadDescriptionsIntoQuickPick(
-    targets,
-    quickPick,
-    () => isClosed
-  );
-
-  return new Promise((resolve) => {
-    quickPick.onDidAccept(async () => {
-      const selectedItem = quickPick.selectedItems[0];
-
-      if (!selectedItem) {
-        await vscode.window.showWarningMessage("Choose one TDLib function from the list.");
-        return;
-      }
-
-      isClosed = true;
-      quickPick.hide();
-      resolve(selectedItem.target);
-    });
-
-    quickPick.onDidHide(() => {
-      isClosed = true;
-      quickPick.dispose();
-      resolve(undefined);
-    });
-
-    descriptionLoadingPromise.finally(() => {
-      if (!isClosed) {
-        quickPick.busy = false;
-      }
-    });
-
-    quickPick.show();
+  entityIndex.descriptionLoadingPromise = runDescriptionWorkers(entityIndex).catch((error) => {
+    console.error("TDLib Docs background description loading failed:", error);
   });
 }
 
 /**
- * @param {Array<TdlibEntityTarget>} targets
- * @param {vscode.QuickPick<TdlibQuickPickItem>} quickPick
- * @param {() => boolean} isClosed
+ * @param {TdlibEntityIndex} entityIndex
  * @returns {Promise<void>}
  */
-async function loadDescriptionsIntoQuickPick(targets, quickPick, isClosed) {
-  let nextIndex = 0;
+async function runDescriptionWorkers(entityIndex) {
   let completedSinceLastRefresh = 0;
 
   async function worker() {
-    while (!isClosed()) {
-      const target = targets[nextIndex];
-      nextIndex += 1;
+    while (true) {
+      const target = getNextDescriptionTarget(entityIndex);
 
       if (!target) {
         return;
       }
 
-      if (!target.descriptionLoaded) {
-        await loadTargetDescription(target);
-      }
+      await loadTargetDescription(target);
 
       completedSinceLastRefresh += 1;
 
-      if (!isClosed() && completedSinceLastRefresh >= 20) {
+      if (completedSinceLastRefresh >= QUICK_PICK_REFRESH_INTERVAL) {
         completedSinceLastRefresh = 0;
-        quickPick.items = createQuickPickItems(targets);
+        refreshActiveQuickPick(entityIndex);
       }
     }
   }
 
+  const workerCount = Math.min(MAX_DESCRIPTION_FETCH_CONCURRENCY, entityIndex.targets.length);
   const workers = [];
 
-  for (let i = 0; i < MAX_DESCRIPTION_FETCH_CONCURRENCY; i += 1) {
+  for (let i = 0; i < workerCount; i += 1) {
     workers.push(worker());
   }
 
   await Promise.all(workers);
 
-  if (!isClosed()) {
-    quickPick.items = createQuickPickItems(targets);
+  refreshActiveQuickPick(entityIndex);
+}
+
+/**
+ * @param {TdlibEntityIndex} entityIndex
+ * @returns {TdlibEntityTarget | undefined}
+ */
+function getNextDescriptionTarget(entityIndex) {
+  while (entityIndex.descriptionNextIndex < entityIndex.targets.length) {
+    const target = entityIndex.targets[entityIndex.descriptionNextIndex];
+    entityIndex.descriptionNextIndex += 1;
+
+    if (!target.descriptionLoadAttempted && !target.descriptionLoading) {
+      target.descriptionLoading = true;
+      return target;
+    }
   }
+
+  return undefined;
 }
 
 /**
@@ -309,6 +362,14 @@ async function loadDescriptionsIntoQuickPick(targets, quickPick, isClosed) {
  * @returns {Promise<void>}
  */
 async function loadTargetDescription(target) {
+  if (!target.checkDescription) {
+    target.description = undefined;
+    target.descriptionLoaded = false;
+    target.descriptionLoading = false;
+    target.descriptionLoadAttempted = true;
+    return;
+  }
+
   try {
     const html = await fetchText(target.url);
     const $ = cheerio.load(html);
@@ -318,11 +379,116 @@ async function loadTargetDescription(target) {
     );
 
     target.description = firstParagraphText || undefined;
-  } catch {
+    target.descriptionLoaded = Boolean(firstParagraphText);
+  } catch (error) {
+    console.error(`Failed to load description for ${target.name}:`, error);
+
     target.description = undefined;
+    target.descriptionLoaded = false;
   } finally {
-    target.descriptionLoaded = true;
+    target.descriptionLoading = false;
+    target.descriptionLoadAttempted = true;
   }
+}
+
+/**
+ * @param {TdlibEntityIndex} entityIndex
+ * @param {string} initialValue
+ * @returns {Promise<TdlibEntityTarget | undefined>}
+ */
+function pickEntityTarget(entityIndex, initialValue) {
+  const quickPick = vscode.window.createQuickPick();
+
+  quickPick.title = "Open TDLib entity documentation";
+  quickPick.placeholder = "Type to filter TDLib entity names";
+  quickPick.matchOnDescription = true;
+  quickPick.matchOnDetail = true;
+  quickPick.value = initialValue;
+
+  syncQuickPickItemsFromTargets(entityIndex);
+
+  quickPick.items = [...entityIndex.quickPickItems];
+  quickPick.busy = !areAllDescriptionsAttempted(entityIndex);
+
+  activeQuickPickState = {
+    quickPick,
+    entityIndex,
+  };
+
+  return new Promise((resolve) => {
+    let didResolve = false;
+
+    function finish(result) {
+      if (didResolve) {
+        return;
+      }
+
+      didResolve = true;
+
+      if (activeQuickPickState?.quickPick === quickPick) {
+        activeQuickPickState = undefined;
+      }
+
+      quickPick.dispose();
+      resolve(result);
+    }
+
+    quickPick.onDidAccept(async () => {
+      const selectedItem = quickPick.selectedItems[0];
+
+      if (!selectedItem) {
+        await vscode.window.showWarningMessage("Choose one TDLib entity from the list.");
+        return;
+      }
+
+      finish(selectedItem.target);
+    });
+
+    quickPick.onDidHide(() => {
+      finish(undefined);
+    });
+
+    quickPick.show();
+  });
+}
+
+/**
+ * @param {TdlibEntityIndex} entityIndex
+ * @returns {void}
+ */
+function refreshActiveQuickPick(entityIndex) {
+  if (!activeQuickPickState) {
+    return;
+  }
+
+  if (activeQuickPickState.entityIndex !== entityIndex) {
+    return;
+  }
+
+  syncQuickPickItemsFromTargets(entityIndex);
+
+  activeQuickPickState.quickPick.items = [...entityIndex.quickPickItems];
+  activeQuickPickState.quickPick.busy = !areAllDescriptionsAttempted(entityIndex);
+}
+
+/**
+ * @param {TdlibEntityIndex} entityIndex
+ * @returns {void}
+ */
+function syncQuickPickItemsFromTargets(entityIndex) {
+  for (const item of entityIndex.quickPickItems) {
+    if (item.detail !== item.target.description) {
+      item.detail = item.target.description;
+    }
+  }
+}
+
+/**
+ * @param {TdlibEntityIndex} entityIndex
+ * @returns {boolean}
+ */
+function areAllDescriptionsAttempted(entityIndex) {
+  return entityIndex.targets.every((target) => target.descriptionLoadAttempted);
 }
 
 /**
@@ -332,8 +498,8 @@ async function loadTargetDescription(target) {
 function createQuickPickItems(targets) {
   return targets.map((target) => ({
     label: target.name,
-    description: target.description,
-    detail: target.url,
+    description: target.url,
+    detail: target.description,
     target,
   }));
 }
@@ -375,10 +541,16 @@ async function openUrlInIntegratedBrowser(url) {
 
 /**
  * @param {string} url
+ * @param {number} redirectCount
  * @returns {Promise<string>}
  */
-function fetchText(url) {
+function fetchText(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
+    if (redirectCount > MAX_REDIRECTS) {
+      reject(new Error(`Too many redirects for ${url}`));
+      return;
+    }
+
     const parsedUrl = new URL(url);
     const client = parsedUrl.protocol === "http:" ? http : https;
 
@@ -387,7 +559,7 @@ function fetchText(url) {
       {
         headers: {
           "User-Agent": "VSCode TDLib Docs Opener",
-          "Accept": "text/html,application/xhtml+xml",
+          Accept: "text/html,application/xhtml+xml",
         },
       },
       (response) => {
@@ -396,13 +568,14 @@ function fetchText(url) {
         if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
           const redirectedUrl = new URL(response.headers.location, parsedUrl).toString();
           response.resume();
-          resolve(fetchText(redirectedUrl));
+          resolve(fetchText(redirectedUrl, redirectCount + 1));
           return;
         }
 
         if (statusCode < 200 || statusCode >= 300) {
           response.resume();
-          reject(new Error(`HTTP ${statusCode} for ${url}`));
+
+          reject(new Error(`HTTP ${statusCode} ${response.statusMessage ?? ""} for ${url}`));
           return;
         }
 
@@ -479,6 +652,9 @@ module.exports = {
  * @typedef {object} TdlibEntityIndex
  * @property {Array<TdlibEntityTarget>} targets
  * @property {Map<string, TdlibEntityTarget>} targetByNormalizedName
+ * @property {Array<TdlibQuickPickItem>} quickPickItems
+ * @property {number} descriptionNextIndex
+ * @property {Promise<void> | undefined} descriptionLoadingPromise
  */
 
 /**
@@ -489,8 +665,16 @@ module.exports = {
  * @property {string} url
  * @property {string | undefined} description
  * @property {boolean} descriptionLoaded
+ * @property {boolean} descriptionLoading
+ * @property {boolean} descriptionLoadAttempted
  */
 
 /**
  * @typedef {vscode.QuickPickItem & { target: TdlibEntityTarget }} TdlibQuickPickItem
+ */
+
+/**
+ * @typedef {object} ActiveQuickPickState
+ * @property {vscode.QuickPick<TdlibQuickPickItem>} quickPick
+ * @property {TdlibEntityIndex} entityIndex
  */

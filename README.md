@@ -4,12 +4,13 @@ A VS Code extension that adds TDLib documentation navigation commands.
 
 The extension provides commands for opening:
 
-- documentation for a specific TDLib function, based on selected text
-- the TDLib functions index page for `td_api::Function`
-- the TDLib generated documentation index
+- documentation for a specific TDLib entity, based on selected text
+- the TDLib functions index page
+- the TDLib classes index page
+- the TDLib generated documentation overview page
 - the main TDLib overview page
 
-For concrete TDLib functions documented under `td_api::Function`, the extension can use the selected text in the active editor as the function-name candidate. It can also open common TDLib documentation index pages directly.
+For opening the documentation of a TDLib entity, the extension can use the selected text in the active editor as the entity-name candidate.
 
 Pages are opened inside a VS Code tab using VS Code’s integrated browser.
 
@@ -18,44 +19,46 @@ Pages are opened inside a VS Code tab using VS Code’s integrated browser.
 The extension contributes these commands:
 
 ```text
-TDLib Docs: Open Function Documentation
+TDLib Docs: Open Entity Documentation
 TDLib Docs: Open Functions Index
-TDLib Docs: Open Docs Index
+TDLib Docs: Open Classes Index
+TDLib Docs: Open Documentation Overview
 TDLib Docs: Open TDLib Overview
 ```
 
 Command IDs:
 
 ```text
-tdlibDocs.openFunctionDocs
+tdlibDocs.openEntityDocs
 tdlibDocs.openFunctionsIndex
-tdlibDocs.openDocsIndex
+tdlibDocs.openClassesIndex
+tdlibDocs.openDocsOverview
 tdlibDocs.openTdlibOverview
 ```
 
 ## Behavior
 
-### Open Function Documentation
+### Open Entity Documentation
 
-When `TDLib Docs: Open Function Documentation` runs:
+When `TDLib Docs: Open Entity Documentation` runs:
 
-1. The extension fetches the TDLib function list from:
+1. The extension fetches the TDLib entity list from:
 
    ```text
-   https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html
+   https://core.telegram.org/tdlib/docs/classes.html
    ```
 
-2. It extracts all function names from the `Inherited by ...` paragraph.
+2. It extracts all entity names from the text of all li elements inside the page that represent TDLib entities.
 
-3. It checks the current selected text against the extracted TDLib function names.
+3. It checks the current selected text against the extracted TDLib entity names.
 
 4. If there is an exact normalized match, it opens the matching documentation page.
 
 5. If there is no match, or if the selected text is empty, it opens a filterable QuickPick list.
 
-6. The user can type inside the QuickPick to filter the valid TDLib function names.
+6. The user can type inside the QuickPick to filter the valid TDLib entity names.
 
-7. Only one of the predefined TDLib function names can be selected.
+7. Only one of the predefined TDLib entity names can be selected.
 
 ### Open Functions Index
 
@@ -64,8 +67,15 @@ Opens:
 ```text
 https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html
 ```
+### Open Classes Index
 
-### Open Docs Index
+Opens:
+
+```text
+https://core.telegram.org/tdlib/docs/classes.html
+```
+
+### Open Documentation Overview
 
 Opens:
 

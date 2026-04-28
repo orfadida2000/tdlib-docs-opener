@@ -27,7 +27,7 @@
   "categories": [
     "Other"
   ],
-  "main": "./index2.js",
+  "main": "./index.js",
   "extensionKind": [
     "ui"
   ],
@@ -50,7 +50,7 @@
       },
       {
         "command": "tdlibDocs.openDocsOverview",
-        "title": "TDLib Docs: Open Docs Overview",
+        "title": "TDLib Docs: Open Documentation Overview",
         "category": "TDLib Docs"
       },
       {
